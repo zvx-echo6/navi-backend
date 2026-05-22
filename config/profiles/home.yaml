@@ -1,0 +1,67 @@
+# Deployment profile: Home (VM 1130)
+# Active on the main Echo6 deployment. Full stack with planet-scale NA tiles.
+# Override via RECON_PROFILE env var in /etc/systemd/system/recon.service
+
+profile: home
+region_name: "North America"
+
+tileset:
+  url: "/tiles/planet/current.pmtiles"
+  bounds: [-168, 14, -52, 72]
+  max_zoom: 15
+  attribution: "Protomaps © OSM"
+
+tileset_hillshade:
+  url: "/tiles/planet-dem.pmtiles"
+  encoding: "terrarium"
+  max_zoom: 12
+
+traffic:
+  provider: "tomtom"
+  proxy_url: "/api/traffic/flow/{z}/{x}/{y}.png"
+
+place_details:
+  local_source: "nominatim"
+  local_bbox: [-125.0, 31.3, -104.0, 49.0]
+  fallback_source: "overpass"
+
+services:
+  geocode: "/api/geocode"
+  reverse: "/api/reverse"
+  address_book: "/api/address_book"
+  valhalla: "/valhalla"
+
+auth:
+  login_url: "/outpost.goauthentik.io/start?rd=%2F"
+  logout_url: "https://auth.echo6.co/if/flow/default-invalidation-flow/?next=https://navi.echo6.co/"
+
+features:
+  has_nominatim_details: true
+  has_kiwix_wiki: true
+  has_hillshade: true
+  has_3d_terrain: false
+  has_traffic_overlay: true
+  has_landclass: true
+  has_public_lands_layer: true
+  has_contours: true
+  has_contours_test: false
+  has_contours_test_10ft: false
+  has_address_book_write: false
+  has_overture_enrichment: true
+  has_google_places_enrichment: true
+  has_contacts: true
+  has_wiki_rewriting: true
+  has_wiki_discovery: false
+  has_usfs_trails: true
+  has_blm_trails: true
+
+defaults:
+  center: [42.5736, -114.6066]
+  zoom: 10
+
+# Offroute wilderness routing
+offroute:
+  osm_pbf_path: "/mnt/nav/sources/idaho-latest.osm.pbf"
+  densify_interval_m: 100
+  postgis_dsn: "dbname=padus"
+
