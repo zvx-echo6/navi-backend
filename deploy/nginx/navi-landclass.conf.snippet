@@ -1,0 +1,26 @@
+# =============================================================================
+# navi-landclass — nginx integration for the navi.echo6.co vhost
+#
+# ONE block. Add INSIDE the existing
+#     server { server_name navi.echo6.co; ... }
+# block, BEFORE the existing `location /api/ { ... }` block.
+#
+# `^~` (the lesson from extraction #1) makes nginx skip regex evaluation when
+# this is the longest prefix match, so the vhost's `location ~* \.(...)$`
+# asset-regex can never shadow it. No trailing slash — `/api/landclass` is a
+# single endpoint (no subpaths); the no-slash prefix matches both
+# `/api/landclass` and `/api/landclass?lat=&lon=`.
+#
+# /api/landclass is PUBLIC (no forward_auth) — TIER 2 @public_api in Caddy,
+# already routed through nginx :8440 since extraction #2. So NO Caddy edit.
+#
+# No proxy_cache: results vary by lat/lon and volume is tiny. `X-Cache-Status:
+# BYPASS` for parity with the other navi-* blocks.
+# -----------------------------------------------------------------------------
+    location ^~ /api/landclass {
+        proxy_pass http://127.0.0.1:8424;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 10s;
+        add_header X-Cache-Status BYPASS;
+    }
