@@ -30,7 +30,11 @@ proxy_cache_path /mnt/nav/tile-cache/traffic levels=1:2
 #     `/api/` regardless of order — placing it first keeps the file readable and
 #     makes the precedence obvious to a human.
 # -----------------------------------------------------------------------------
-    location /api/traffic/ {
+    # ^~ is REQUIRED: the vhost has a `location ~* \.(...|png|...)$` regex catch-all,
+    # and in nginx a matching regex beats a plain prefix. Traffic tiles end in .png,
+    # so without ^~ the regex intercepts them and serves a 404 from the static root.
+    # ^~ tells nginx to skip regex evaluation when this is the longest prefix match.
+    location ^~ /api/traffic/ {
         proxy_pass http://127.0.0.1:8421;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
