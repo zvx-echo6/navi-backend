@@ -1,0 +1,44 @@
+# =============================================================================
+# navi-contacts — nginx integration for the navi.echo6.co vhost
+#
+# TWO blocks. Add both INSIDE the existing
+#     server { server_name navi.echo6.co; ... }
+# block, BEFORE the existing `location /api/ { ... }` block.
+#
+# `^~` is required (the lesson from extraction #1): it makes nginx skip regex
+# evaluation when this is the longest prefix match, so the vhost's
+# `location ~* \.(...)$` asset-regex can never shadow these API paths.
+#
+# NOTE on the missing trailing slash: the prefixes are `/api/contacts` and
+# `/api/address_book` (NOT `/api/contacts/`). The contacts blueprint serves the
+# *bare* `/api/contacts` for list (GET) and create (POST) — a trailing-slash
+# prefix `^~ /api/contacts/` would NOT match the bare path and those two
+# requests would fall through to `location /api/` -> recon. Caddy's matcher
+# already handles both forms (`path /api/contacts /api/contacts/*`); the
+# no-trailing-slash prefix here is the nginx equivalent that catches both.
+#
+# Caddy already routes both prefixes through nginx :8440 — /api/contacts/* via
+# TIER 1 @authed_api (forward_auth, extraction #1) and /api/address_book/* via
+# TIER 2 @public_api (extraction #2) — so NO Caddy edit is needed.
+#
+# No proxy_cache: contacts is per-user mutable data; address_book is tiny and
+# hot-reloaded in-process. `X-Cache-Status: BYPASS` for parity with the other
+# navi-* blocks. X-Authentik-Username is forwarded for contacts so the service
+# can partition per user (Caddy injects it after forward_auth).
+# -----------------------------------------------------------------------------
+    location ^~ /api/contacts {
+        proxy_pass http://127.0.0.1:8423;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Authentik-Username $http_x_authentik_username;
+        proxy_read_timeout 10s;
+        add_header X-Cache-Status BYPASS;
+    }
+
+    location ^~ /api/address_book {
+        proxy_pass http://127.0.0.1:8423;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 10s;
+        add_header X-Cache-Status BYPASS;
+    }

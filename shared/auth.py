@@ -23,7 +23,12 @@ def require_auth(fn):
     """
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if not get_user_id(request):
+        user_id = get_user_id(request)
+        if not user_id:
             return jsonify({'error': 'authentication required'}), 401
+        # Expose the validated identity to the handler (recon's contract;
+        # contacts routes read request.user_id). Harmless for endpoints that
+        # don't use it (navi-traffic/navi-config admin).
+        request.user_id = user_id
         return fn(*args, **kwargs)
     return wrapper
