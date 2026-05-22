@@ -1,0 +1,15 @@
+[Unit]
+Description=navi-landclass — PAD-US land classification API (Echo6 navi-backend, extraction #4)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=zvx
+WorkingDirectory=/home/zvx/projects/repos/navi-backend
+EnvironmentFile=/etc/navi-backend/navi-landclass.env
+ExecStart=/home/zvx/projects/repos/navi-backend/.venv/bin/gunicorn 'services.navi_landclass.app:create_app()' --bind 127.0.0.1:8424 --workers 2
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
