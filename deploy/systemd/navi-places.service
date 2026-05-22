@@ -1,0 +1,15 @@
+[Unit]
+Description=navi-places — OSM place detail + enrichment API (Echo6 navi-backend, extraction #5)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=zvx
+WorkingDirectory=/home/zvx/projects/repos/navi-backend
+EnvironmentFile=/etc/navi-backend/navi-places.env
+ExecStart=/home/zvx/projects/repos/navi-backend/.venv/bin/gunicorn 'services.navi_places.app:create_app()' --bind 127.0.0.1:8425 --workers 2
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
