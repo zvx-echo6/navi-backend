@@ -1,0 +1,15 @@
+[Unit]
+Description=navi-traffic — TomTom traffic tile proxy (Echo6 navi-backend, extraction #1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=zvx
+WorkingDirectory=/home/zvx/projects/repos/navi-backend
+EnvironmentFile=/etc/navi-backend/navi-traffic.env
+ExecStart=/home/zvx/projects/repos/navi-backend/.venv/bin/gunicorn 'services.navi_traffic.app:create_app()' --bind 127.0.0.1:8421 --workers 2
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

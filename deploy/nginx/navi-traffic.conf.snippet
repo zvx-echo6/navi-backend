@@ -1,0 +1,44 @@
+# =============================================================================
+# navi-traffic — nginx integration for the navi.echo6.co vhost
+#
+# Two parts, both required. Behavior-neutral with respect to the existing
+# `location /api/` proxy: only /api/traffic/* requests change path (they now go
+# to the navi-traffic service on :8421 and get an nginx cache layer).
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# (A) NEW FILE:  /etc/nginx/conf.d/traffic-cache.conf
+#     http{} context (conf.d/* is included there). Defines the proxy_cache zone
+#     consumed by section (B). Mirrors the existing satellite-cache.conf and
+#     dem-cache.conf pattern verified in Phase 0.
+# -----------------------------------------------------------------------------
+proxy_cache_path /mnt/nav/tile-cache/traffic levels=1:2
+    keys_zone=traffic_cache:10m
+    max_size=10g
+    inactive=24h
+    use_temp_path=off;
+
+
+# -----------------------------------------------------------------------------
+# (B) EDIT:  /etc/nginx/sites-available/navi.echo6.co
+#     Add the location block below INSIDE the existing
+#         server { server_name navi.echo6.co; ... }
+#     block, placed BEFORE the existing `location /api/ { ... }` block.
+#
+#     nginx selects the longest matching prefix, so `/api/traffic/` wins over
+#     `/api/` regardless of order — placing it first keeps the file readable and
+#     makes the precedence obvious to a human.
+# -----------------------------------------------------------------------------
+    location /api/traffic/ {
+        proxy_pass http://127.0.0.1:8421;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 10s;
+
+        # Cache successful tiles for 120s (matches the handler's Cache-Control).
+        proxy_cache traffic_cache;
+        proxy_cache_valid 200 120s;
+        proxy_cache_use_stale error timeout updating;
+        add_header X-Cache-Status $upstream_cache_status;
+    }

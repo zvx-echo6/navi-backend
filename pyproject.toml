@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "navi-backend"
+version = "0.1.0"
+description = "Echo6 navi-backend monorepo — Navi API services extracted from recon (decoupling project)."
+requires-python = ">=3.10"
+# Single workspace, single .venv. pytest is included so `pip install -e .` is the
+# only setup step needed before running the test suite.
+dependencies = [
+    "Flask>=3.0",
+    "gunicorn>=21",
+    "requests>=2.31",
+    "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["shared*", "services*"]
+namespaces = true
+
+[tool.pytest.ini_options]
+testpaths = ["services"]

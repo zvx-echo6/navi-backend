@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtualenv
+.venv/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Local env files (secrets live in /etc/navi-backend/*.env on the host)
+*.env
+.env
