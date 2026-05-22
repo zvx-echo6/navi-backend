@@ -1,0 +1,27 @@
+# =============================================================================
+# navi-config — nginx integration for the navi.echo6.co vhost
+#
+# ONE block. Add it INSIDE the existing
+#     server { server_name navi.echo6.co; ... }
+# block, placed BEFORE the existing `location /api/ { ... }` block.
+#
+# `^~` prefix is the convention for /api/<thing> blocks here: it makes nginx
+# skip regex evaluation when this is the longest prefix match, so the vhost's
+# `location ~* \.(...)$` asset-regex can never shadow it (the lesson from
+# extraction #1 — see navi-traffic.conf.snippet).
+#
+# No proxy_cache zone for this route: the response is already cached two ways —
+# in-process (navi-config caches the parsed profile after first read) and at
+# the client/CDN via `Cache-Control: public, max-age=300` set by the handler.
+# A server-side nginx cache would add nothing. We still emit a literal
+# `X-Cache-Status: BYPASS` header for parity with the navi-traffic block so the
+# admin/debug view shows a consistent field across services.
+# -----------------------------------------------------------------------------
+    location ^~ /api/config {
+        proxy_pass http://127.0.0.1:8422;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 10s;
+
+        add_header X-Cache-Status BYPASS;
+    }

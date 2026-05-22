@@ -13,6 +13,7 @@ dependencies = [
     "Flask>=3.0",
     "gunicorn>=21",
     "requests>=2.31",
+    "PyYAML>=6",
     "pytest>=8",
 ]
 
