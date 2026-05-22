@@ -1,0 +1,28 @@
+# =============================================================================
+# navi-places — nginx integration for the navi.echo6.co vhost
+#
+# ONE block. Add INSIDE the existing
+#     server { server_name navi.echo6.co; ... }
+# block, BEFORE the existing `location /api/ { ... }` block.
+#
+# `^~ /api/place` (NO trailing slash): the `^~` (lesson from extraction #1)
+# makes nginx skip regex evaluation so the asset-regex can't shadow it; the
+# no-trailing-slash prefix catches BOTH `/api/place/<osm_type>/<id>` and
+# `/api/place/wikidata/<id>` (a trailing-slash prefix would miss neither here,
+# but the no-slash form is the safe convention and also catches any future
+# bare /api/place).
+#
+# /api/place/* is PUBLIC (no forward_auth) — TIER 2 @public_api in Caddy,
+# already routed through nginx :8440 since extraction #2. So NO Caddy edit.
+#
+# No proxy_cache: navi-places has its own place_cache.db (SQLite) and results
+# vary by id. `X-Cache-Status: BYPASS` for parity with the other navi-* blocks.
+# -----------------------------------------------------------------------------
+    location ^~ /api/place {
+        proxy_pass http://127.0.0.1:8425;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Authentik-Username $http_x_authentik_username;
+        proxy_read_timeout 15s;
+        add_header X-Cache-Status BYPASS;
+    }
