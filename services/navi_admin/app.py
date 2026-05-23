@@ -1,7 +1,7 @@
-"""navi-geo Flask application factory + gunicorn entry.
+"""navi-admin Flask application factory + gunicorn entry.
 
 Gunicorn entry:
-    gunicorn 'services.navi_geo.app:create_app()' --bind 127.0.0.1:8426 --workers 2
+    gunicorn 'services.navi_admin.app:create_app()' --bind 127.0.0.1:8427 --workers 2
 """
 import time
 
@@ -9,10 +9,7 @@ from flask import Flask
 
 from shared.git_sha import git_short_sha
 
-from . import geo_route, admin
-from . import geocode as geocode_mod
-from . import netsyms
-from . import address_book
+from . import admin_route
 
 
 def create_app():
@@ -24,12 +21,6 @@ def create_app():
         'request_count': 0,
         'last_error_at': None,
     }
-
-    # Fresh per-worker (and per-test) state, so each picks up current env.
-    geo_route.reset_cache()
-    netsyms.reset_conn()
-    address_book.reset_cache()
-    geocode_mod.setup_trace_logger()   # re-read NAVI_GEO_RERANK_TRACE_LOG
 
     @app.before_request
     def _count_request():
@@ -43,6 +34,5 @@ def create_app():
             )
         return response
 
-    app.register_blueprint(geo_route.bp)
-    app.register_blueprint(admin.bp)
+    app.register_blueprint(admin_route.bp)
     return app

@@ -6,26 +6,14 @@ Gunicorn entry:
 Serves two blueprints: contacts (10 routes, auth-gated) and address_book
 (2 routes, public), plus the §4.5 admin-info endpoint.
 """
-import subprocess
 import time
 
 from flask import Flask
 
+from shared.git_sha import git_short_sha
+
 from . import contacts_route, address_book_route, admin
 from . import address_book as address_book_mod
-
-
-def _git_sha():
-    """Short git SHA of the working tree at startup, or 'unknown' off-repo."""
-    try:
-        sha = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        return sha or 'unknown'
-    except Exception:
-        return 'unknown'
 
 
 def create_app():
@@ -33,7 +21,7 @@ def create_app():
 
     # Version + lightweight runtime metrics, read by the admin-info endpoint.
     # NOTE: with gunicorn --workers 2 these counters are per-worker.
-    app.config['VERSION'] = _git_sha()
+    app.config['VERSION'] = git_short_sha()
     app.config['METRICS'] = {
         'start_time': time.time(),
         'request_count': 0,

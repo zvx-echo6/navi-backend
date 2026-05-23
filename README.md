@@ -69,6 +69,25 @@ public. The reverse bundle fans out to Photon, the SpatiaLite timezone DB,
 navi-landclass (HTTP), and the planet-DEM PMTiles — each degrading to `null`
 independently, never 5xx.
 
+## Run (local) — navi-admin (extraction #7)
+
+```bash
+.venv/bin/pytest services/navi_admin/tests/ -v
+
+# No secrets — read-only HTTP fan-out over localhost (see
+# deploy/env/navi-admin.env.example). Owns no DB.
+.venv/bin/gunicorn 'services.navi_admin.app:create_app()' \
+    --bind 127.0.0.1:8427 --workers 2
+```
+
+`navi-admin` is the fleet admin front door: `/api/admin/fleet` fans out to every
+navi-* service's localhost `/api/admin/<svc>/info` + recon's `/api/health`
+(merged, never 5xx — failures land in `errors[]`); `/api/admin/recon/info` wraps
+recon's health into the uniform shape; `/api/admin/navi-admin/info` self-describes.
+All `@require_auth`. The per-service admin endpoints stay localhost-only; this is
+the single edge-exposed admin surface (needs a Caddy `@authed_api` edit — see
+`deploy/caddy/navi-admin.caddy.notes.md`).
+
 ## The admin-info convention (§4.5)
 
 Every service exposes `GET /api/admin/<service-name>/info`, gated by `require_auth`,
