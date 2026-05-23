@@ -27,13 +27,12 @@ def db_path():
 
 _conn = None
 _lock = threading.Lock()
-_cached_row_count = None
 
 
 def reset_conn():
-    """Drop the cached connection + row count so the next call reopens (env may
-    have changed). Used per app instance / per test."""
-    global _conn, _cached_row_count
+    """Drop the cached connection so the next call reopens (env may have
+    changed). Used per app instance / per test."""
+    global _conn
     with _lock:
         if _conn is not None:
             try:
@@ -41,7 +40,6 @@ def reset_conn():
             except Exception:
                 pass
         _conn = None
-        _cached_row_count = None
 
 # US states + DC + territories, CA provinces, for free-text parsing
 _STATE_CODES = {
@@ -204,47 +202,3 @@ def lookup_by_zipcode(zipcode, limit=100):
     results = [_row_to_dict(r) for r in rows]
     logger.debug("lookup_by_zipcode(%s) → %d results", zipcode, len(results))
     return results
-
-
-def health():
-    """Health check with cached row count."""
-    global _cached_row_count
-
-    try:
-        file_size = os.path.getsize(db_path())
-    except OSError:
-        return {'ok': False, 'row_count': 0, 'file_size_bytes': 0,
-                'indexed_countries': []}
-
-    try:
-        conn = _get_conn()
-    except Exception:
-        return {'ok': False, 'row_count': 0, 'file_size_bytes': file_size,
-                'indexed_countries': []}
-
-    if _cached_row_count is None:
-        with _lock:
-            if _cached_row_count is None:
-                try:
-                    row = conn.execute(
-                        "SELECT COUNT(*) AS cnt FROM addresses"
-                    ).fetchone()
-                    _cached_row_count = row['cnt']
-                except sqlite3.Error:
-                    _cached_row_count = 0
-
-    with _lock:
-        try:
-            rows = conn.execute(
-                "SELECT DISTINCT country FROM addresses"
-            ).fetchall()
-            countries = sorted(r['country'] for r in rows)
-        except sqlite3.Error:
-            countries = []
-
-    return {
-        'ok': True,
-        'row_count': _cached_row_count,
-        'file_size_bytes': file_size,
-        'indexed_countries': countries,
-    }
