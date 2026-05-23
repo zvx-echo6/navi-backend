@@ -1,10 +1,16 @@
 """
-DEM tile reader (port of recon's offroute/dem.py).
+Shared DEM tile reader (port of recon's offroute/dem.py).
 
 Reads elevation tiles from planet-dem.pmtiles (Terrarium-encoded WebP),
 decodes them into numpy arrays, and provides a stitched elevation grid
-for a given bounding box. navi-geo uses ``sample_point`` for the reverse
-bundle's ``elevation_m``. Faithful port; only change is the env-override path.
+for a given bounding box.
+
+Lives in ``shared/`` because it's designed to be used by multiple navi-*
+services that need elevation: navi-geo's reverse bundle uses ``sample_point``
+for ``elevation_m``, and other elevation-consuming services import the same
+``DEMReader`` rather than each carrying a copy. The DEM path is env-overridable
+via ``NAVI_DEM_PMTILES`` (``dem_path()``). Faithful logic; only the location and
+docstring changed in the promotion.
 """
 import math
 import os

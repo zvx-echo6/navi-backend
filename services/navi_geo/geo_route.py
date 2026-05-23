@@ -23,7 +23,7 @@ from flask import Blueprint, request, jsonify
 from . import geocode as geocode_mod
 from . import landclass_client
 from .geocode import photon_url, _parse_photon_features
-from .dem import DEMReader, dem_path
+from shared.dem import DEMReader, dem_path
 
 logger = logging.getLogger('navi_geo.geo_route')
 
