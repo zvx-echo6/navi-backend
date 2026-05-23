@@ -52,6 +52,23 @@ TOMTOM_API_KEY=... .venv/bin/gunicorn 'services.navi_traffic.app:create_app()' \
     --bind 127.0.0.1:8421 --workers 2
 ```
 
+## Run (local) — navi-geo (extraction #6)
+
+```bash
+.venv/bin/pytest services/navi_geo/tests/ -v
+
+# All paths/URLs are env-overridable (see deploy/env/navi-geo.env.example).
+# No secrets — landclass is HTTP-delegated to navi-landclass (:8424).
+.venv/bin/gunicorn 'services.navi_geo.app:create_app()' \
+    --bind 127.0.0.1:8426 --workers 2
+```
+
+`navi-geo` serves `/api/geocode`, `/api/reverse?lat=&lon=`, and the reverse
+enrichment bundle `/api/reverse/<lat>/<lon>` (Central's 9-key contract). All
+public. The reverse bundle fans out to Photon, the SpatiaLite timezone DB,
+navi-landclass (HTTP), and the planet-DEM PMTiles — each degrading to `null`
+independently, never 5xx.
+
 ## The admin-info convention (§4.5)
 
 Every service exposes `GET /api/admin/<service-name>/info`, gated by `require_auth`,

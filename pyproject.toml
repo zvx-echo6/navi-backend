@@ -16,6 +16,14 @@ dependencies = [
     "PyYAML>=6",
     "psycopg2-binary>=2.9",
     "pytest>=8",
+    # navi-geo (extraction #6): geocode engine + reverse bundle.
+    "usaddress>=0.5",     # address parsing / intent classification
+    "rapidfuzz>=3",       # reranker fuzzy string scoring
+    "cachetools>=5",      # reverse-bundle TTLCache
+    "shapely>=2",         # timezone point-in-polygon
+    "numpy>=1.24",        # planet-DEM tile decode
+    "Pillow>=10",         # planet-DEM Terrarium WebP decode
+    "pmtiles>=3",         # planet-DEM PMTiles reader
 ]
 
 [tool.setuptools.packages.find]
