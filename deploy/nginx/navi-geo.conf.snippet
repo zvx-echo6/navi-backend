@@ -1,0 +1,41 @@
+# =============================================================================
+# navi-geo — nginx integration for the navi.echo6.co vhost
+#
+# TWO blocks. Add INSIDE the existing
+#     server { server_name navi.echo6.co; ... }
+# block, BEFORE the existing `location /api/ { ... }` block.
+#
+# `^~` (lesson from extraction #1) makes nginx skip regex evaluation so the
+# asset-regex can't shadow these. The no-trailing-slash prefixes are deliberate:
+#
+#   ^~ /api/geocode   → /api/geocode?...
+#   ^~ /api/reverse   → BOTH /api/reverse?lat=&lon=  AND  /api/reverse/<lat>/<lon>
+#
+# The single `^~ /api/reverse` prefix catching both reverse forms is the whole
+# point — the query-string reverse (navi frontend) and the path-param reverse
+# bundle (Central) are different routes on the same service.
+#
+# Both endpoints are PUBLIC (no forward_auth) — TIER 2 @public_api in Caddy,
+# already routed through nginx :8440 since extraction #2. So NO Caddy edit.
+#
+# No proxy_cache: geocode/reverse vary per query and the reverse bundle has its
+# own in-memory TTLCache. `X-Cache-Status: BYPASS` for parity with the other
+# navi-* blocks.
+# -----------------------------------------------------------------------------
+    location ^~ /api/geocode {
+        proxy_pass http://127.0.0.1:8426;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Authentik-Username $http_x_authentik_username;
+        proxy_read_timeout 15s;
+        add_header X-Cache-Status BYPASS;
+    }
+
+    location ^~ /api/reverse {
+        proxy_pass http://127.0.0.1:8426;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Authentik-Username $http_x_authentik_username;
+        proxy_read_timeout 15s;
+        add_header X-Cache-Status BYPASS;
+    }
