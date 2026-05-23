@@ -96,7 +96,10 @@ def test_fleet_service_timeout_lands_in_errors(client, monkeypatch, captured):
     b[8425] = 'timeout'                       # navi-places times out
     _wire(monkeypatch, b, captured)
     data = client.get('/api/admin/fleet', headers=AUTH).get_json()
-    assert 'navi-places' not in data['services']
+    # Invariant: still present in services, as a uniform degraded entry...
+    assert data['services']['navi-places']['runtime']['status'] == 'unreachable'
+    assert data['services']['navi-places']['port'] == 8425
+    # ...and recorded in errors.
     assert {'service': 'navi-places', 'error': 'timeout'} in data['errors']
 
 
@@ -105,7 +108,7 @@ def test_fleet_service_http_500_lands_in_errors(client, monkeypatch, captured):
     b[8426] = ('http', 500)                   # navi-geo 500s
     _wire(monkeypatch, b, captured)
     data = client.get('/api/admin/fleet', headers=AUTH).get_json()
-    assert 'navi-geo' not in data['services']
+    assert data['services']['navi-geo']['runtime']['status'] == 'unreachable'
     assert {'service': 'navi-geo', 'error': 'HTTP 500'} in data['errors']
 
 
@@ -126,8 +129,32 @@ def test_fleet_never_5xx_when_recon_down_and_a_service_errors(client, monkeypatc
     # recon still present as a degraded entry, AND recorded in errors
     assert data['services']['recon']['runtime']['recon_status'] == 'unreachable'
     assert {'service': 'recon', 'error': 'timeout'} in data['errors']
+    # navi-traffic also present (degraded) AND in errors — the uniform invariant
+    assert data['services']['navi-traffic']['runtime']['status'] == 'unreachable'
     assert {'service': 'navi-traffic', 'error': 'HTTP 502'} in data['errors']
-    assert 'navi-traffic' not in data['services']
+
+
+def test_fleet_service_returns_html_lands_as_invalid_json(client, monkeypatch, captured):
+    """200 OK with a non-JSON body (e.g. a misrouted upstream returning HTML) must
+    surface as 'invalid JSON' in errors[], not the opaque 'ValueError'."""
+    b = _all_ok()
+
+    class _HtmlResp:
+        status_code = 200
+
+        def json(self):
+            raise ValueError('not JSON')
+
+    def fake_get(url, headers=None, timeout=None):
+        captured.append(headers or {})
+        if ':8425/' in url:
+            return _HtmlResp()
+        return _router(b, [])(url, headers=headers, timeout=timeout)
+
+    monkeypatch.setattr(fleet.requests, 'get', fake_get)
+    data = client.get('/api/admin/fleet', headers=AUTH).get_json()
+    assert {'service': 'navi-places', 'error': 'invalid JSON'} in data['errors']
+    assert data['services']['navi-places']['runtime']['status'] == 'unreachable'
 
 
 # ── recon/info wrapper ──────────────────────────────────────────────────────

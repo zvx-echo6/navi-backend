@@ -82,6 +82,10 @@ def _get_json(url, auth_user, timeout):
         return resp.json(), latency_ms, None
     except requests.Timeout:
         return None, round((time.monotonic() - start) * 1000, 1), 'timeout'
+    except ValueError:
+        # 200 with a non-JSON body (e.g. a misrouted upstream serving HTML).
+        # json.JSONDecodeError subclasses ValueError — report it plainly.
+        return None, round((time.monotonic() - start) * 1000, 1), 'invalid JSON'
     except Exception as exc:
         return None, round((time.monotonic() - start) * 1000, 1), type(exc).__name__
 
@@ -130,29 +134,43 @@ def wrap_recon_health(health, error):
     }
 
 
+def _degraded_entry(name, port, error):
+    """Uniform 'service was probed but failed' entry — matches the
+    build_info_response shape so callers see the same keys whether the service is
+    healthy or down. (recon has its own health-wrapped degraded shape via
+    wrap_recon_health, which keeps recon-specific runtime fields.)"""
+    return {
+        'service': name, 'version': 'unknown', 'port': port,
+        'config': {}, 'env': [],
+        'dependencies': [{'name': f'{name}-info', 'status': 'error', 'error': error}],
+        'filesystem': [],
+        'runtime': {'status': 'unreachable'},
+    }
+
+
 def build_fleet(auth_user):
     """Fan out to all navi-* services + recon in parallel; merge. Never raises.
 
     Returns {services: {<name>: <info>}, fetched_at: ISO8601, errors: [{service, error}]}.
-    A service that times out / errors is omitted from `services` and recorded in
-    `errors`; recon always appears in `services` (degraded dict when down) AND in
-    `errors` when its health is unreachable."""
+    Invariant: EVERY probed service appears in `services` — a full info dict when
+    healthy, a uniform degraded dict when it fails — and `errors` is a parallel
+    listing of which ones failed and why. (recon's degraded dict comes from
+    wrap_recon_health and keeps recon-specific runtime fields.)"""
     timeout = fanout_timeout()
-    targets = [(name, service_info_url(name, port)) for name, port in SERVICES]
+    targets = [(name, port, service_info_url(name, port)) for name, port in SERVICES]
 
-    def _fetch(name, url):
+    def _fetch(name, port, url):
         _, full, error = probe(name, url, auth_user, timeout)
-        return name, full, error
+        return name, port, full, error
 
     services = {}
     errors = []
     with ThreadPoolExecutor(max_workers=len(targets) + 1) as ex:
-        futures = [ex.submit(_fetch, name, url) for name, url in targets]
+        futures = [ex.submit(_fetch, name, port, url) for name, port, url in targets]
         recon_future = ex.submit(probe, RECON_SERVICE_NAME, recon_health_url(), auth_user, timeout)
         for fut in futures:
-            name, full, error = fut.result()
-            if full is not None:
-                services[name] = full
+            name, port, full, error = fut.result()
+            services[name] = full if full is not None else _degraded_entry(name, port, error)
             if error:
                 errors.append({'service': name, 'error': error})
         _, recon_health, recon_error = recon_future.result()
