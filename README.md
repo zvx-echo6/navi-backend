@@ -88,6 +88,24 @@ All `@require_auth`. The per-service admin endpoints stay localhost-only; this i
 the single edge-exposed admin surface (needs a Caddy `@authed_api` edit — see
 `deploy/caddy/navi-admin.caddy.notes.md`).
 
+## Run (local) — navi-offroute (extraction #8)
+
+```bash
+.venv/bin/pytest services/navi_offroute/tests/ -v
+
+# All paths/URLs env-overridable (deploy/env/navi-offroute.env.example).
+# No secrets — PADUS via libpq peer-auth (dbname=padus). DEM via shared/dem.py.
+# Needs osmium-tool on the host + scikit-image/rasterio in the venv.
+.venv/bin/gunicorn 'services.navi_offroute.app:create_app()' \
+    --bind 127.0.0.1:8428 --workers 2 --timeout 130
+```
+
+`navi-offroute` serves `POST /api/offroute` (off-network effort-based routing —
+in-Python least-cost path over a DEM/friction/barriers/trails/MVUM cost grid,
+stitched to the road network via Valhalla) and `GET /api/mvum` (Motor Vehicle
+Use Map road/trail access lookup). Both public. The `^~ /api/offroute` nginx
+block needs a long `proxy_read_timeout` (130s); routes can take ~2 min.
+
 ## The admin-info convention (§4.5)
 
 Every service exposes `GET /api/admin/<service-name>/info`, gated by `require_auth`,
