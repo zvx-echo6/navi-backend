@@ -10,6 +10,7 @@ from flask import Flask
 from shared.git_sha import git_short_sha
 
 from . import admin_route
+from . import auth_route
 
 
 def create_app():
@@ -35,4 +36,5 @@ def create_app():
         return response
 
     app.register_blueprint(admin_route.bp)
+    app.register_blueprint(auth_route.bp)
     return app
