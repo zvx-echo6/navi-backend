@@ -12,11 +12,12 @@ editing this file to add it — so an env list would add a moving part with no
 payoff. (One source of truth: the ports/names live here only.)
 """
 import os
-import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
+
+from shared.git_sha import git_short_sha
 
 # (service-name, port) for every shipped navi-* service. The admin-info path is
 # always /api/admin/<service-name>/info. Add a row when a new extraction ships.
@@ -57,16 +58,9 @@ def service_info_url(name, port):
 
 
 def recon_git_sha():
-    """recon's deployed git SHA, or 'unknown'. Best-effort: a local `git -C`
-    on the deploy clone (Phase A confirmed /opt/recon is a readable git repo)."""
-    try:
-        sha = subprocess.check_output(
-            ['git', '-C', recon_repo_path(), 'rev-parse', '--short', 'HEAD'],
-            stderr=subprocess.DEVNULL, text=True, timeout=3,
-        ).strip()
-        return sha or 'unknown'
-    except Exception:
-        return 'unknown'
+    """recon's deployed git SHA, or 'unknown'. Reads from recon_repo_path()
+    (default /opt/recon on VM 1130, Phase A-verified)."""
+    return git_short_sha(recon_repo_path())
 
 
 def _get_json(url, auth_user, timeout):
@@ -101,21 +95,31 @@ def probe(name, url, auth_user, timeout=None):
     return summary, full, error
 
 
+def _degraded_entry(name, port, error):
+    """Uniform 'service was probed but failed' entry — matches the
+    build_info_response shape so callers see the same keys whether the service is
+    healthy or down. Used for every failure path (navi-* AND recon), so there is
+    exactly one degraded shape: runtime.status == 'unreachable'."""
+    return {
+        'service': name, 'version': 'unknown', 'port': port,
+        'config': {}, 'env': [],
+        'dependencies': [{'name': f'{name}-info', 'status': 'error', 'error': error}],
+        'filesystem': [],
+        'runtime': {'status': 'unreachable'},
+    }
+
+
 def wrap_recon_health(health, error):
     """Wrap recon's /api/health into an admin-info-shaped dict (service:'recon').
 
     recon has no admin-info endpoint (Phase A §3); /api/health is the closest
-    input. Its components become `dependencies`, its pipeline/status become
-    `runtime`. Recon down → a degraded dict (never raises, never 5xx)."""
-    version = recon_git_sha()
+    input. On success its components become `dependencies` and its pipeline/status
+    become recon-specific `runtime` fields (meaningful only when recon is up). On
+    failure → the same uniform _degraded_entry shape as every other service (no
+    recon-specific data exists to preserve when recon is unreachable)."""
     if health is None:
-        return {
-            'service': RECON_SERVICE_NAME, 'version': version, 'port': RECON_PORT,
-            'config': {}, 'env': [],
-            'dependencies': [{'name': 'recon-health', 'status': 'error', 'error': error or 'unreachable'}],
-            'filesystem': [],
-            'runtime': {'recon_status': 'unreachable'},
-        }
+        return _degraded_entry(RECON_SERVICE_NAME, RECON_PORT, error or 'unreachable')
+    version = recon_git_sha()
     components = health.get('components', {})
     dependencies = [
         {'name': cname, 'status': cval.get('status'), **{k: v for k, v in cval.items() if k != 'status'}}
@@ -134,28 +138,14 @@ def wrap_recon_health(health, error):
     }
 
 
-def _degraded_entry(name, port, error):
-    """Uniform 'service was probed but failed' entry — matches the
-    build_info_response shape so callers see the same keys whether the service is
-    healthy or down. (recon has its own health-wrapped degraded shape via
-    wrap_recon_health, which keeps recon-specific runtime fields.)"""
-    return {
-        'service': name, 'version': 'unknown', 'port': port,
-        'config': {}, 'env': [],
-        'dependencies': [{'name': f'{name}-info', 'status': 'error', 'error': error}],
-        'filesystem': [],
-        'runtime': {'status': 'unreachable'},
-    }
-
-
 def build_fleet(auth_user):
     """Fan out to all navi-* services + recon in parallel; merge. Never raises.
 
     Returns {services: {<name>: <info>}, fetched_at: ISO8601, errors: [{service, error}]}.
     Invariant: EVERY probed service appears in `services` — a full info dict when
-    healthy, a uniform degraded dict when it fails — and `errors` is a parallel
-    listing of which ones failed and why. (recon's degraded dict comes from
-    wrap_recon_health and keeps recon-specific runtime fields.)"""
+    healthy, the uniform `_degraded_entry` shape (runtime.status == 'unreachable')
+    when it fails — and `errors` is a parallel listing of which ones failed and
+    why. No special cases: recon failures use the same degraded shape."""
     timeout = fanout_timeout()
     targets = [(name, port, service_info_url(name, port)) for name, port in SERVICES]
 

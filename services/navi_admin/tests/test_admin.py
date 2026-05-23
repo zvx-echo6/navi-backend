@@ -126,8 +126,8 @@ def test_fleet_never_5xx_when_recon_down_and_a_service_errors(client, monkeypatc
     resp = client.get('/api/admin/fleet', headers=AUTH)
     assert resp.status_code == 200            # never 5xx
     data = resp.get_json()
-    # recon still present as a degraded entry, AND recorded in errors
-    assert data['services']['recon']['runtime']['recon_status'] == 'unreachable'
+    # recon still present as a degraded entry (same uniform shape), AND in errors
+    assert data['services']['recon']['runtime']['status'] == 'unreachable'
     assert {'service': 'recon', 'error': 'timeout'} in data['errors']
     # navi-traffic also present (degraded) AND in errors — the uniform invariant
     assert data['services']['navi-traffic']['runtime']['status'] == 'unreachable'
@@ -176,8 +176,10 @@ def test_recon_info_recon_down_is_degraded_not_5xx(client, monkeypatch, captured
     assert resp.status_code == 200            # degraded, not 5xx
     data = resp.get_json()
     assert data['service'] == 'recon'
-    assert data['runtime']['recon_status'] == 'unreachable'
+    # Uniform degraded shape (same as every other service) — no recon_status special case.
+    assert data['runtime']['status'] == 'unreachable'
     assert data['dependencies'][0]['status'] == 'error'
+    assert data['dependencies'][0]['name'] == 'recon-info'
 
 
 # ── self-info ───────────────────────────────────────────────────────────────

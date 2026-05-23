@@ -3,10 +3,11 @@
 Gunicorn entry:
     gunicorn 'services.navi_places.app:create_app()' --bind 127.0.0.1:8425 --workers 2
 """
-import subprocess
 import time
 
 from flask import Flask
+
+from shared.git_sha import git_short_sha
 
 from . import place_route, admin
 from . import overture
@@ -14,21 +15,10 @@ from . import place_cache
 from . import config as places_config
 
 
-def _git_sha():
-    try:
-        sha = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            stderr=subprocess.DEVNULL, text=True,
-        ).strip()
-        return sha or 'unknown'
-    except Exception:
-        return 'unknown'
-
-
 def create_app():
     app = Flask(__name__)
 
-    app.config['VERSION'] = _git_sha()
+    app.config['VERSION'] = git_short_sha()
     app.config['METRICS'] = {
         'start_time': time.time(),
         'request_count': 0,

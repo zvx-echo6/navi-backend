@@ -3,10 +3,11 @@
 Gunicorn entry:
     gunicorn 'services.navi_geo.app:create_app()' --bind 127.0.0.1:8426 --workers 2
 """
-import subprocess
 import time
 
 from flask import Flask
+
+from shared.git_sha import git_short_sha
 
 from . import geo_route, admin
 from . import geocode as geocode_mod
@@ -14,21 +15,10 @@ from . import netsyms
 from . import address_book
 
 
-def _git_sha():
-    try:
-        sha = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            stderr=subprocess.DEVNULL, text=True,
-        ).strip()
-        return sha or 'unknown'
-    except Exception:
-        return 'unknown'
-
-
 def create_app():
     app = Flask(__name__)
 
-    app.config['VERSION'] = _git_sha()
+    app.config['VERSION'] = git_short_sha()
     app.config['METRICS'] = {
         'start_time': time.time(),
         'request_count': 0,

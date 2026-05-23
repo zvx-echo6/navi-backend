@@ -3,25 +3,13 @@
 Gunicorn entry:
     gunicorn 'services.navi_traffic.app:create_app()' --bind 127.0.0.1:8421 --workers 2
 """
-import subprocess
 import time
 
 from flask import Flask
 
+from shared.git_sha import git_short_sha
+
 from . import traffic, admin
-
-
-def _git_sha():
-    """Short git SHA of the working tree at startup, or 'unknown' off-repo."""
-    try:
-        sha = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        return sha or 'unknown'
-    except Exception:
-        return 'unknown'
 
 
 def create_app():
@@ -30,7 +18,7 @@ def create_app():
     # Version + lightweight runtime metrics, read by the admin-info endpoint.
     # NOTE: with gunicorn --workers 2 these counters are per-worker (each worker
     # is its own process); they are indicative, not cluster-wide totals.
-    app.config['VERSION'] = _git_sha()
+    app.config['VERSION'] = git_short_sha()
     app.config['METRICS'] = {
         'start_time': time.time(),
         'request_count': 0,

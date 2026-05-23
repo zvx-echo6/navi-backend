@@ -32,4 +32,4 @@ include = ["shared*", "services*"]
 namespaces = true
 
 [tool.pytest.ini_options]
-testpaths = ["services"]
+testpaths = ["services", "shared"]
