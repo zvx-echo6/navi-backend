@@ -39,7 +39,7 @@ def create_app():
     geo_route.reset_cache()
     netsyms.reset_conn()
     address_book.reset_cache()
-    geocode_mod._setup_trace_logger()   # re-read NAVI_GEO_RERANK_TRACE_LOG
+    geocode_mod.setup_trace_logger()   # re-read NAVI_GEO_RERANK_TRACE_LOG
 
     @app.before_request
     def _count_request():

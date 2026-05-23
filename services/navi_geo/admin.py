@@ -16,6 +16,7 @@ from flask import Blueprint, jsonify, current_app
 from shared.auth import require_auth
 from shared.admin_info import build_info_response
 
+from . import netsyms
 from .geocode import photon_url
 from .landclass_client import landclass_url
 from .netsyms import db_path as netsyms_db_path
@@ -75,6 +76,24 @@ def _file_entry(path):
     }
 
 
+def _netsyms_fs_entry(path):
+    """netsyms filesystem entry enriched with netsyms.health() — row count, file
+    size, and indexed countries on top of the standard path/exists/readable.
+
+    health() degrades gracefully (ok:False, zeros) when the DB is absent, so this
+    never raises. row_count is cached after the first call inside netsyms; the
+    DISTINCT-country query runs per call but admin-info is auth-gated + rare."""
+    entry = _file_entry(path)
+    h = netsyms.health()
+    entry.update({
+        'ok': h['ok'],
+        'row_count': h['row_count'],
+        'file_size_bytes': h['file_size_bytes'],
+        'indexed_countries': h['indexed_countries'],
+    })
+    return entry
+
+
 @bp.route('/api/admin/navi-geo/info')
 @require_auth
 def navi_geo_info():
@@ -104,7 +123,7 @@ def navi_geo_info():
             _landclass_dependency(),
         ],
         filesystem=[
-            _file_entry(netsyms_db),
+            _netsyms_fs_entry(netsyms_db),
             _file_entry(timezone_db),
             _file_entry(dem_file),
             _file_entry(address_book_path()),

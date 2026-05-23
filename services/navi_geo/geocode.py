@@ -43,7 +43,7 @@ _trace_logger = logging.getLogger('navi_geo.geocode.trace')
 _trace_logger.propagate = False
 
 
-def _setup_trace_logger():
+def setup_trace_logger():
     """(Re)configure the rerank trace logger from NAVI_GEO_RERANK_TRACE_LOG."""
     for h in list(_trace_logger.handlers):
         _trace_logger.removeHandler(h)
@@ -59,7 +59,7 @@ def _setup_trace_logger():
         _trace_logger.setLevel(logging.WARNING)
 
 
-_setup_trace_logger()
+setup_trace_logger()
 
 # ── Config constants ──
 GEOCODE_BIAS_LAT = 42.5736

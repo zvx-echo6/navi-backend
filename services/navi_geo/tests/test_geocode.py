@@ -183,17 +183,17 @@ def test_geocode_dedup_collapses_near_duplicates(monkeypatch):
 
 def test_trace_logger_off_by_default(monkeypatch):
     monkeypatch.delenv('NAVI_GEO_RERANK_TRACE_LOG', raising=False)
-    gc._setup_trace_logger()
+    gc.setup_trace_logger()
     assert not any(isinstance(h, gc.logging.FileHandler) for h in gc._trace_logger.handlers)
 
 
 def test_trace_logger_attaches_when_env_set(tmp_path, monkeypatch):
     path = tmp_path / 'trace.log'
     monkeypatch.setenv('NAVI_GEO_RERANK_TRACE_LOG', str(path))
-    gc._setup_trace_logger()
+    gc.setup_trace_logger()
     assert any(isinstance(h, gc.logging.FileHandler) for h in gc._trace_logger.handlers)
     monkeypatch.delenv('NAVI_GEO_RERANK_TRACE_LOG', raising=False)
-    gc._setup_trace_logger()      # restore default-off for other tests
+    gc.setup_trace_logger()      # restore default-off for other tests
 
 
 # ── admin-info: no secrets, expected probes ───────────────────────────────
@@ -215,3 +215,29 @@ def test_admin_info_has_no_secrets_and_two_probes(monkeypatch):
 def test_admin_info_requires_auth():
     client = create_app().test_client()
     assert client.get('/api/admin/navi-geo/info').status_code == 401
+
+
+def test_admin_info_netsyms_entry_enriched_with_health(tmp_path, monkeypatch):
+    # netsyms.health() is wired into the netsyms filesystem entry (review fix #3):
+    # the entry carries row_count / file_size_bytes / indexed_countries on top of
+    # the standard path/exists/readable. Use a tiny real sqlite so health() runs.
+    import sqlite3
+    db = tmp_path / 'netsyms.sqlite'
+    con = sqlite3.connect(db)
+    con.execute('CREATE TABLE addresses (country TEXT)')
+    con.executemany('INSERT INTO addresses (country) VALUES (?)',
+                    [('US',), ('US',), ('CA',)])
+    con.commit()
+    con.close()
+    monkeypatch.setenv('NAVI_NETSYMS_DB', str(db))
+
+    client = create_app().test_client()      # reset_conn() picks up the new path
+    resp = client.get('/api/admin/navi-geo/info',
+                      headers={'X-Authentik-Username': 'matt'})
+    assert resp.status_code == 200
+    fs = resp.get_json()['filesystem']
+    netsyms_entry = next(e for e in fs if e['path'] == str(db))
+    assert netsyms_entry['ok'] is True
+    assert netsyms_entry['row_count'] == 3
+    assert netsyms_entry['file_size_bytes'] > 0
+    assert set(netsyms_entry['indexed_countries']) == {'US', 'CA'}

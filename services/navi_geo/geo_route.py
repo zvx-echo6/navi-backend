@@ -16,6 +16,7 @@ import os
 import sqlite3
 import threading
 
+import requests as http_requests
 from cachetools import TTLCache
 from flask import Blueprint, request, jsonify
 
@@ -131,7 +132,6 @@ def api_reverse():
     query_str = f"{lat},{lon}"
 
     try:
-        import requests as http_requests
         resp = http_requests.get(
             f"{photon_url()}/reverse",
             params={"lat": lat, "lon": lon, "limit": 1},
@@ -174,7 +174,6 @@ def _spatialite_blob_to_wkb(blob):
 def _reverse_photon(lat, lon):
     """Nearest-feature admin fields from local Photon. Returns the six address
     fields (any value may be None). Mirrors the existing /api/reverse call."""
-    import requests as http_requests
     resp = http_requests.get(
         f"{photon_url()}/reverse",
         params={"lat": lat, "lon": lon, "limit": 1},

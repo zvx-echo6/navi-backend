@@ -16,7 +16,11 @@ import requests
 
 DEFAULT_LANDCLASS_URL = 'http://127.0.0.1:8424'
 
-# Matches recon's in-process landclass latency budget + small HTTP overhead.
+# 5s covers a local in-DC HTTP round-trip plus the underlying PostGIS query.
+# PAD-US lookups can be slow on points with many overlapping polygons
+# (Yosemite has ~30 overlapping units), so don't tighten below ~3s without
+# checking the slow-end p99. Recon's in-process call had no timeout because it
+# was a direct DB call inside the same process; the HTTP boundary needs one.
 LANDCLASS_TIMEOUT_S = 5
 
 
