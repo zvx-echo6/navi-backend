@@ -1,0 +1,30 @@
+# =============================================================================
+# navi-admin — nginx integration for the navi.echo6.co vhost
+#
+# ONE block. Add INSIDE the existing
+#     server { server_name navi.echo6.co; ... }
+# block, BEFORE the existing `location /api/ { ... }` catch-all (which currently
+# sends /api/admin/* to recon:8420 → 404, since recon has no /api/admin route).
+#
+# `^~ /api/admin` (NO trailing slash): the `^~` (extraction-#1 lesson) makes
+# nginx skip regex evaluation; the no-slash prefix catches /api/admin/fleet,
+# /api/admin/recon/info, and /api/admin/navi-admin/info.
+#
+# IMPORTANT — this route is AUTH-GATED, unlike the public navi-* prefixes. It
+# needs the matching Caddy edit (see deploy/caddy/navi-admin.caddy.notes.md):
+# add /api/admin/* to @authed_api so forward_auth runs before this proxy. The
+# X-Authentik-Username header set below is what navi-admin forwards on its
+# localhost fan-out to each per-service @require_auth /api/admin/<svc>/info.
+#
+# The per-service /api/admin/<svc>/info endpoints stay localhost-only — they are
+# NOT exposed here. This single /api/admin front door (the fleet aggregator) is
+# the only edge-reachable admin surface.
+# -----------------------------------------------------------------------------
+    location ^~ /api/admin {
+        proxy_pass http://127.0.0.1:8427;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Authentik-Username $http_x_authentik_username;
+        proxy_read_timeout 15s;
+        add_header X-Cache-Status BYPASS;
+    }
