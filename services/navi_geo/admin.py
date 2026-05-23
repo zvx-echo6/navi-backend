@@ -19,7 +19,7 @@ from shared.admin_info import build_info_response
 from .geocode import photon_url
 from .landclass_client import landclass_url
 from .netsyms import db_path as netsyms_db_path
-from .dem import dem_path
+from shared.dem import dem_path
 from .geo_route import tz_db_path
 from .address_book import _config_path as address_book_path
 
