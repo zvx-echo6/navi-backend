@@ -36,6 +36,8 @@ class FrictionReader:
     def _open(self):
         """Lazy open the dataset."""
         if self._dataset is None:
+            if not self.friction_path.exists():
+                raise FileNotFoundError(f"Friction VRT not found at {self.friction_path}")
             self._dataset = rasterio.open(self.friction_path)
         return self._dataset
     

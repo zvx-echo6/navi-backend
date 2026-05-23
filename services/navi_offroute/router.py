@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Literal, Set
 
 import numpy as np
+import psutil
 import requests
 import psycopg2
 import psycopg2.extras
@@ -94,13 +95,8 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 def check_memory_usage() -> float:
-    """Check current memory usage in GB."""
-    try:
-        import psutil
-        process = psutil.Process()
-        return process.memory_info().rss / (1024**3)
-    except ImportError:
-        return 0
+    """Current process RSS in GB."""
+    return psutil.Process().memory_info().rss / (1024**3)
 
 
 class EntryPointIndex:

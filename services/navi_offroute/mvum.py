@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Literal
 
 import numpy as np
+from shapely import wkb
+from shapely.geometry import Point
 
 # Path to navi.db (single source of truth); env-overridable.
 DEFAULT_NAVI_DB_PATH = Path("/mnt/nav/navi.db")
@@ -400,34 +402,27 @@ class MVUMReader:
 
         # Find nearest feature
         # This is a simplified approach - for production, use spatial index
-        try:
-            from shapely import wkb
-            from shapely.geometry import Point
+        query_point = Point(lon, lat)
+        nearest = None
+        min_dist = float('inf')
 
-            query_point = Point(lon, lat)
-            nearest = None
-            min_dist = float('inf')
+        for row in cur:
+            try:
+                geom = wkb.loads(row["shape"])
+                dist = query_point.distance(geom)
+                if dist < min_dist and dist < radius_deg:
+                    min_dist = dist
+                    nearest = dict(row)
+                    nearest["geometry"] = geom
+            except Exception:
+                continue
 
-            for row in cur:
-                try:
-                    geom = wkb.loads(row["shape"])
-                    dist = query_point.distance(geom)
-                    if dist < min_dist and dist < radius_deg:
-                        min_dist = dist
-                        nearest = dict(row)
-                        nearest["geometry"] = geom
-                except Exception:
-                    continue
-
-            if nearest:
-                # Convert geometry to GeoJSON
-                nearest["geojson"] = nearest["geometry"].__geo_interface__
-                del nearest["geometry"]
-                del nearest["shape"]
-                return nearest
-
-        except ImportError:
-            warnings.warn("shapely not available for nearest query")
+        if nearest:
+            # Convert geometry to GeoJSON
+            nearest["geojson"] = nearest["geometry"].__geo_interface__
+            del nearest["geometry"]
+            del nearest["shape"]
+            return nearest
 
         return None
 
@@ -487,50 +482,44 @@ def get_mvum_access_grid(
         trails = reader.query_trails_bbox(south, north, west, east, mode, parsed_date)
 
         # Rasterize features
-        try:
-            from shapely import wkb
+        for features in [roads, trails]:
+            for feat in features:
+                try:
+                    geom = wkb.loads(feat["shape"])
 
-            for features in [roads, trails]:
-                for feat in features:
-                    try:
-                        geom = wkb.loads(feat["shape"])
+                    # Get geometry bounds
+                    minx, miny, maxx, maxy = geom.bounds
 
-                        # Get geometry bounds
-                        minx, miny, maxx, maxy = geom.bounds
-
-                        # Check if intersects our bbox
-                        if maxx < west or minx > east or maxy < south or miny > north:
-                            continue
-
-                        # Rasterize line
-                        value = 1 if feat["access"] else 255
-
-                        # Simple line rasterization
-                        if geom.geom_type in ("LineString", "MultiLineString"):
-                            if geom.geom_type == "MultiLineString":
-                                coords_list = [list(line.coords) for line in geom.geoms]
-                            else:
-                                coords_list = [list(geom.coords)]
-
-                            for coords in coords_list:
-                                for i in range(len(coords) - 1):
-                                    x1, y1 = coords[i]
-                                    x2, y2 = coords[i + 1]
-
-                                    # Convert to pixel coordinates
-                                    col1 = int((x1 - west) / pixel_lon)
-                                    row1 = int((north - y1) / pixel_lat)
-                                    col2 = int((x2 - west) / pixel_lon)
-                                    row2 = int((north - y2) / pixel_lat)
-
-                                    # Bresenham's line algorithm
-                                    _draw_line(grid, row1, col1, row2, col2, value)
-
-                    except Exception as e:
+                    # Check if intersects our bbox
+                    if maxx < west or minx > east or maxy < south or miny > north:
                         continue
 
-        except ImportError:
-            warnings.warn("shapely not available, MVUM rasterization skipped")
+                    # Rasterize line
+                    value = 1 if feat["access"] else 255
+
+                    # Simple line rasterization
+                    if geom.geom_type in ("LineString", "MultiLineString"):
+                        if geom.geom_type == "MultiLineString":
+                            coords_list = [list(line.coords) for line in geom.geoms]
+                        else:
+                            coords_list = [list(geom.coords)]
+
+                        for coords in coords_list:
+                            for i in range(len(coords) - 1):
+                                x1, y1 = coords[i]
+                                x2, y2 = coords[i + 1]
+
+                                # Convert to pixel coordinates
+                                col1 = int((x1 - west) / pixel_lon)
+                                row1 = int((north - y1) / pixel_lat)
+                                col2 = int((x2 - west) / pixel_lon)
+                                row2 = int((north - y2) / pixel_lat)
+
+                                # Bresenham's line algorithm
+                                _draw_line(grid, row1, col1, row2, col2, value)
+
+                except Exception as e:
+                    continue
 
     finally:
         reader.close()

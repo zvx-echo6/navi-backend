@@ -51,10 +51,7 @@ class TrailReader:
         """Lazy open the dataset."""
         if self._dataset is None:
             if not self.trails_path.exists():
-                raise FileNotFoundError(
-                    f"Trails raster not found at {self.trails_path}. "
-                    f"Run the Phase B rasterization script first."
-                )
+                raise FileNotFoundError(f"Trails raster not found at {self.trails_path}")
             self._dataset = rasterio.open(self.trails_path)
         return self._dataset
 

@@ -208,6 +208,16 @@ def test_mvum_missing_coords_400(client):
     assert client.get('/api/mvum?lat=43.6').status_code == 400
 
 
+def test_friction_reader_raises_file_not_found_when_missing(tmp_path):
+    """The FileNotFoundError pre-check (review fix #2) fires before rasterio sees
+    the path — consistent with the barriers/trails readers."""
+    from services.navi_offroute.friction import FrictionReader
+    reader = FrictionReader(tmp_path / 'does-not-exist.vrt')
+    with pytest.raises(FileNotFoundError) as exc:
+        reader._open()
+    assert 'Friction VRT not found' in str(exc.value)
+
+
 # ── admin-info — mocked probes ─────────────────────────────────────────────
 
 def _mock_probes_ok(monkeypatch):
