@@ -24,6 +24,9 @@ dependencies = [
     "numpy>=1.24",        # planet-DEM tile decode
     "Pillow>=10",         # planet-DEM Terrarium WebP decode
     "pmtiles>=3",         # planet-DEM PMTiles reader
+    # navi-offroute (extraction #8): off-network router + readers.
+    "scikit-image>=0.22", # MCP_Geometric least-cost pathfinding (router.py)
+    "rasterio>=1.3",      # barriers/wilderness/trails/friction raster readers
 ]
 
 [tool.setuptools.packages.find]

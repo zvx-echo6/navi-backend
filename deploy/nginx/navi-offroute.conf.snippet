@@ -1,0 +1,33 @@
+# =============================================================================
+# navi-offroute — nginx integration for the navi.echo6.co vhost
+#
+# TWO blocks. Add INSIDE the existing
+#     server { server_name navi.echo6.co; ... }
+# block, BEFORE the existing `location /api/ { ... }` catch-all.
+#
+# Both routes are PUBLIC (no forward_auth) — @public_api in Caddy already covers
+# them, so NO Caddy edit (extraction #8 / Phase A §12).
+#
+# KEY DELTA from other navi-* blocks: `^~ /api/offroute` needs a LONG
+# proxy_read_timeout (130s). Off-network routing runs an in-Python least-cost
+# search + Valhalla + a per-request `osmium extract` and can take up to ~2 min;
+# the frontend allows 120s (Phase A §8/§15.8). The matching gunicorn
+# `--timeout 130` is set in navi-offroute.service. /api/mvum is fast (default).
+# -----------------------------------------------------------------------------
+    location ^~ /api/offroute {
+        proxy_pass http://127.0.0.1:8428;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Authentik-Username $http_x_authentik_username;
+        proxy_read_timeout 130s;   # long-running routing (see above)
+        add_header X-Cache-Status BYPASS;
+    }
+
+    location ^~ /api/mvum {
+        proxy_pass http://127.0.0.1:8428;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Authentik-Username $http_x_authentik_username;
+        proxy_read_timeout 15s;
+        add_header X-Cache-Status BYPASS;
+    }
