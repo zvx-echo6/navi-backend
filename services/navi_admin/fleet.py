@@ -26,6 +26,7 @@ SERVICES = [
     ('navi-landclass', 8424),  # #4 PAD-US land classification
     ('navi-places', 8425),     # #5 OSM place detail + enrichment
     ('navi-geo', 8426),        # #6 geocode + reverse + reverse bundle
+    ('navi-offroute', 8428),   # #8 off-network routing + MVUM
 ]
 
 DEFAULT_FANOUT_TIMEOUT_S = 3.0
