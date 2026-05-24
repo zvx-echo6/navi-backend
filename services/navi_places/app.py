@@ -12,6 +12,7 @@ from shared.git_sha import git_short_sha
 from . import place_route, admin
 from . import overture
 from . import place_cache
+from . import wiki_index
 from . import config as places_config
 
 
@@ -29,6 +30,7 @@ def create_app():
     # gunicorn worker (and each test) picks up the current env.
     overture.reset_pool()
     place_cache.reset_cache()
+    wiki_index.reset()
     places_config.reset_config()
 
     @app.before_request
