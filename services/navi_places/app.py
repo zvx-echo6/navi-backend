@@ -13,6 +13,7 @@ from . import place_route, admin
 from . import overture
 from . import place_cache
 from . import wiki_index
+from . import wiki_rewrite
 from . import config as places_config
 
 
@@ -31,6 +32,7 @@ def create_app():
     overture.reset_pool()
     place_cache.reset_cache()
     wiki_index.reset()
+    wiki_rewrite.reset()
     places_config.reset_config()
 
     @app.before_request

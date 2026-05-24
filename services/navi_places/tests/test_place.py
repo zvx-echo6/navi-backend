@@ -3,8 +3,8 @@
 All upstreams are mocked: Nominatim/Overpass/Wikidata via a fake http_requests
 on place_detail; Overture via monkeypatched overture functions; Google via the
 gate; wiki_index via a real tmp SQLite DB; wiki-rewrite via monkeypatched
-wiki_rewrite_client. Feature flags via a stubbed config.has_feature. The cache
-uses a real tmp SQLite (auto-created).
+wiki_rewrite.rewrite_wiki_link. Feature flags via a stubbed config.has_feature.
+The cache uses a real tmp SQLite (auto-created).
 """
 import sqlite3
 
@@ -153,15 +153,15 @@ def test_overture_gated_off_no_pg_call(client, monkeypatch):
     assert client.get('/api/place/W/123').status_code == 200
 
 
-# ── wiki rewrite via HTTP (the new coupling) ──
+# ── wiki rewrite via local Kiwix ──
 
-def test_wiki_rewrite_via_http_local_hit(tmp_path, monkeypatch):
+def test_wiki_rewrite_local_hit(tmp_path, monkeypatch):
     monkeypatch.setenv('NAVI_PLACE_CACHE_DB', str(tmp_path / 'pc.db'))
     _flags(monkeypatch, enabled=('has_wiki_rewriting',))
     nom = {**NOMINATIM_CAFE, 'extratags': {'wikipedia': 'en:Filer, Idaho'}}
     monkeypatch.setattr(pd, 'http_requests', FakeHTTP(get=lambda url, **kw: FakeResp(200, nom)))
-    monkeypatch.setattr(pd.wiki_rewrite_client, 'rewrite_via_recon',
-                        lambda tag, value, **kw: {'url': 'https://wiki.echo6.co/content/z/Filer,_Idaho', 'status': 'local'})
+    monkeypatch.setattr(pd.wiki_rewrite, 'rewrite_wiki_link',
+                        lambda tag, value: ('https://wiki.echo6.co/content/z/Filer,_Idaho', 'local'))
     client = create_app().test_client()
     d = client.get('/api/place/W/123').get_json()
     assert d['extratags']['wikipedia'] == 'https://wiki.echo6.co/content/z/Filer,_Idaho'
@@ -173,8 +173,8 @@ def test_wiki_rewrite_original_passes_through(tmp_path, monkeypatch):
     _flags(monkeypatch, enabled=('has_wiki_rewriting',))
     nom = {**NOMINATIM_CAFE, 'extratags': {'wikipedia': 'en:Nowhere'}}
     monkeypatch.setattr(pd, 'http_requests', FakeHTTP(get=lambda url, **kw: FakeResp(200, nom)))
-    monkeypatch.setattr(pd.wiki_rewrite_client, 'rewrite_via_recon',
-                        lambda tag, value, **kw: {'url': value, 'status': 'original'})
+    monkeypatch.setattr(pd.wiki_rewrite, 'rewrite_wiki_link',
+                        lambda tag, value: (value, 'original'))
     client = create_app().test_client()
     d = client.get('/api/place/W/123').get_json()
     assert d['extratags']['wikipedia'] == 'en:Nowhere'  # unchanged

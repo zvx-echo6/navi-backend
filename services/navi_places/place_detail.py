@@ -1,11 +1,12 @@
 """Place detail orchestrator — port of recon's lib/place_detail.py.
 
 Local Nominatim first, Overpass fallback, SQLite cache, then enrichment:
-Overture (PostGIS) + Google Places + wiki. wiki_index enrichment is a direct
-local read of navi-places' own wiki_index.db (NAVI_WIKI_INDEX_DB); the Kiwix
-offline-wiki rewrite is still HTTP to recon (separate decouple):
-  - wiki_index summary/links  -> wiki_index.lookup  (local wiki_index.db)
-  - Kiwix offline-wiki rewrite -> wiki_rewrite_client.rewrite_via_recon (/api/wiki-rewrite, PR #9)
+Overture (PostGIS) + Google Places + wiki. Both wiki steps are now in-process
+local reads (no recon HTTP) — wiki_index summary from navi-places' own
+wiki_index.db, and the Kiwix offline-wiki rewrite from the local Kiwix catalog
++ wiki_cache.db:
+  - wiki_index summary/links  -> wiki_index.lookup  (local wiki_index.db, NAVI_WIKI_INDEX_DB)
+  - Kiwix offline-wiki rewrite -> wiki_rewrite.rewrite_wiki_link  (local Kiwix catalog + wiki_cache.db, NAVI_WIKI_CACHE_DB)
 Feature-flag gates (has_overture_enrichment / has_google_places_enrichment /
 has_kiwix_wiki / has_wiki_rewriting) read from the vendored profile via config.py.
 """
@@ -20,7 +21,7 @@ from . import config
 from . import overture
 from . import google_places
 from . import wiki_index
-from . import wiki_rewrite_client
+from . import wiki_rewrite
 from .osm_categories import humanize_category
 from .place_cache import cache_get, cache_put
 
@@ -162,7 +163,7 @@ def _apply_google_data(result, google_data, gaps):
     result['extratags'] = extratags
 
 
-# ── Wiki enrichment: wiki_index (local DB) + Kiwix link rewrite (HTTP to recon) ──
+# ── Wiki enrichment: wiki_index (local DB) + Kiwix link rewrite (local catalog + cache) ──
 
 def _enrich_with_wiki_index(result):
     """Merge wiki_index fields (summary/population/urls) via a direct local read
@@ -188,11 +189,11 @@ def _enrich_with_wiki_index(result):
     return result
 
 
-def _enrich_wiki_links_via_http(result):
-    """Per-tag HTTP rewrite via recon /api/wiki-rewrite. Mirrors recon's
-    in-process _enrich_wiki_links loop: for each of the 4 wiki tag keys present
-    in extratags, call /api/wiki-rewrite; for any status != 'original', set
-    extratags[tag] = url + record under sources.wiki_rewrites[tag] = status.
+def _enrich_wiki_links(result):
+    """Per-tag local Kiwix rewrite. Mirrors recon's in-process _enrich_wiki_links
+    loop: for each of the 4 wiki tag keys present in extratags, rewrite to a
+    local Kiwix URL when the article is mirrored; for any status != 'original',
+    set extratags[tag] = url + record under sources.wiki_rewrites[tag] = status.
     Gated on has_wiki_rewriting."""
     if not config.has_feature('has_wiki_rewriting'):
         return result
@@ -203,10 +204,10 @@ def _enrich_wiki_links_via_http(result):
         value = extratags.get(tag)
         if not value:
             continue
-        out = wiki_rewrite_client.rewrite_via_recon(tag, value)
-        if out.get('status') and out['status'] != 'original':
-            extratags[tag] = out['url']
-            sources_wr[tag] = out['status']
+        url, status = wiki_rewrite.rewrite_wiki_link(tag, value)
+        if status and status != 'original':
+            extratags[tag] = url
+            sources_wr[tag] = status
     return result
 
 
@@ -398,10 +399,11 @@ def _parse_overpass(data, osm_type, osm_id):
 
 def _enrich_all(result, osm_type, osm_id):
     """Run the enrichment chain in recon's order (overture, google, wiki rewrite,
-    wiki index) — the two wiki steps now go over HTTP to recon."""
+    wiki index). Overture (PostGIS) and Google are external upstreams; both wiki
+    steps are in-process local reads (no recon HTTP)."""
     result = _enrich_with_overture(result, osm_type, osm_id)
     result = _enrich_with_google(result, osm_type, osm_id)
-    result = _enrich_wiki_links_via_http(result)
+    result = _enrich_wiki_links(result)
     result = _enrich_with_wiki_index(result)
     return result
 
