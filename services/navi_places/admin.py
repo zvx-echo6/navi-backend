@@ -13,6 +13,7 @@ from shared.admin_info import build_info_response, mask_key
 
 from . import overture
 from . import place_cache
+from . import wiki_index
 
 bp = Blueprint('places_admin', __name__)
 
@@ -56,6 +57,7 @@ def _recon_probe(name, path):
 def navi_places_info():
     metrics = current_app.config['METRICS']
     cache_path = place_cache.db_path()
+    wiki_path = wiki_index.db_path()
     # Two real secrets -> mask_key. The rest are non-secret paths/URLs/params.
     info = build_info_response(
         service='navi-places',
@@ -71,11 +73,11 @@ def navi_places_info():
             {'name': 'GOOGLE_PLACES_API_KEY', 'value': mask_key(os.environ.get('GOOGLE_PLACES_API_KEY'))},
             {'name': 'RECON_BASE_URL', 'value': _recon_base()},
             {'name': 'NAVI_PLACE_CACHE_DB', 'value': cache_path},
+            {'name': 'NAVI_WIKI_INDEX_DB', 'value': wiki_path},
             {'name': 'NAVI_PROFILES_DIR', 'value': os.environ.get('NAVI_PROFILES_DIR', '(default vendored)')},
         ],
         dependencies=[
             _overture_dependency(),
-            _recon_probe('recon-wiki-enrich', '/api/wiki-enrich'),
             _recon_probe('recon-wiki-rewrite', '/api/wiki-rewrite'),
         ],
         filesystem=[{
@@ -83,6 +85,10 @@ def navi_places_info():
             'exists': os.path.exists(cache_path),
             'readable': os.access(cache_path, os.R_OK),
             'writable': os.access(cache_path, os.W_OK),
+        }, {
+            'path': wiki_path,
+            'exists': os.path.exists(wiki_path),
+            'readable': os.access(wiki_path, os.R_OK),
         }],
         runtime={
             'uptime_s': round(time.time() - metrics['start_time'], 1),

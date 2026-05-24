@@ -2,13 +2,17 @@
 
 All upstreams are mocked: Nominatim/Overpass/Wikidata via a fake http_requests
 on place_detail; Overture via monkeypatched overture functions; Google via the
-gate; wiki via monkeypatched wiki_client / wiki_rewrite_client. Feature flags via
-a stubbed config.has_feature. The cache uses a real tmp SQLite (auto-created).
+gate; wiki_index via a real tmp SQLite DB; wiki-rewrite via monkeypatched
+wiki_rewrite_client. Feature flags via a stubbed config.has_feature. The cache
+uses a real tmp SQLite (auto-created).
 """
+import sqlite3
+
 import pytest
 
 import services.navi_places.place_detail as pd
 import services.navi_places.place_cache as place_cache
+import services.navi_places.wiki_index as wiki_index
 from services.navi_places.app import create_app
 
 
@@ -177,15 +181,27 @@ def test_wiki_rewrite_original_passes_through(tmp_path, monkeypatch):
     assert 'wikipedia' not in d.get('sources', {}).get('wiki_rewrites', {})
 
 
-# ── wiki index summary via HTTP ──
+# ── wiki index summary via local wiki_index.db ──
 
-def test_wiki_enrich_via_http_merges_fields(tmp_path, monkeypatch):
+def test_wiki_enrich_via_local_db_merges_fields(tmp_path, monkeypatch):
     monkeypatch.setenv('NAVI_PLACE_CACHE_DB', str(tmp_path / 'pc.db'))
+    # Hermetic wiki_index.db: one wiki_places row keyed by wikidata_id.
+    wi_path = tmp_path / 'wi.db'
+    conn = sqlite3.connect(str(wi_path))
+    conn.execute(
+        "CREATE TABLE wiki_places (wikidata_id TEXT, place_name TEXT, "
+        "country_code TEXT, summary TEXT, wiki_population INTEGER, "
+        "wikipedia_title TEXT, wikivoyage_title TEXT)")
+    conn.execute(
+        "INSERT INTO wiki_places (wikidata_id, summary, wikipedia_title) VALUES (?,?,?)",
+        ('Q830149', 'A city.', 'Filer'))
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv('NAVI_WIKI_INDEX_DB', str(wi_path))
+    wiki_index.reset()
     _flags(monkeypatch, enabled=('has_kiwix_wiki',))
     nom = {**NOMINATIM_CAFE, 'extratags': {'wikidata': 'Q830149'}}
     monkeypatch.setattr(pd, 'http_requests', FakeHTTP(get=lambda url, **kw: FakeResp(200, nom)))
-    monkeypatch.setattr(pd.wiki_client, 'enrich_via_recon',
-                        lambda **kw: {'wiki_summary': 'A city.', 'wiki_url': 'https://en.wikipedia.org/wiki/Filer'})
     client = create_app().test_client()
     d = client.get('/api/place/W/123').get_json()
     assert d['wiki_summary'] == 'A city.'

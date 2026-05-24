@@ -1,9 +1,10 @@
 """Place detail orchestrator — port of recon's lib/place_detail.py.
 
 Local Nominatim first, Overpass fallback, SQLite cache, then enrichment:
-Overture (PostGIS) + Google Places + wiki. The two wiki paths are now HTTP to
-recon (the 2.1 GB wiki_index.db and Kiwix/wiki_cache stay in recon):
-  - wiki_index summary/links  -> wiki_client.enrich_via_recon  (/api/wiki-enrich, PR #8)
+Overture (PostGIS) + Google Places + wiki. wiki_index enrichment is a direct
+local read of navi-places' own wiki_index.db (NAVI_WIKI_INDEX_DB); the Kiwix
+offline-wiki rewrite is still HTTP to recon (separate decouple):
+  - wiki_index summary/links  -> wiki_index.lookup  (local wiki_index.db)
   - Kiwix offline-wiki rewrite -> wiki_rewrite_client.rewrite_via_recon (/api/wiki-rewrite, PR #9)
 Feature-flag gates (has_overture_enrichment / has_google_places_enrichment /
 has_kiwix_wiki / has_wiki_rewriting) read from the vendored profile via config.py.
@@ -18,7 +19,7 @@ from shared.auth import get_user_id
 from . import config
 from . import overture
 from . import google_places
-from . import wiki_client
+from . import wiki_index
 from . import wiki_rewrite_client
 from .osm_categories import humanize_category
 from .place_cache import cache_get, cache_put
@@ -161,11 +162,11 @@ def _apply_google_data(result, google_data, gaps):
     result['extratags'] = extratags
 
 
-# ── Wiki enrichment via HTTP to recon (replaces in-process wiki_index/Kiwix) ──
+# ── Wiki enrichment: wiki_index (local DB) + Kiwix link rewrite (HTTP to recon) ──
 
-def _enrich_with_wiki_via_http(result):
-    """Merge wiki_index fields (summary/population/urls) via recon /api/wiki-enrich.
-    Replaces recon's in-process _enrich_with_wiki_index. Gated on has_kiwix_wiki."""
+def _enrich_with_wiki_index(result):
+    """Merge wiki_index fields (summary/population/urls) via a direct local read
+    of wiki_index.db. Port of recon's in-process lookup. Gated on has_kiwix_wiki."""
     if not config.has_feature('has_kiwix_wiki'):
         return result
 
@@ -177,7 +178,7 @@ def _enrich_with_wiki_via_http(result):
     name = result.get('name')
     country_code = address.get('country_code') or result.get('country_code')
 
-    fields = wiki_client.enrich_via_recon(
+    fields = wiki_index.lookup(
         wikidata_id=wikidata_id, name=name, country_code=country_code
     )
     if fields:
@@ -401,7 +402,7 @@ def _enrich_all(result, osm_type, osm_id):
     result = _enrich_with_overture(result, osm_type, osm_id)
     result = _enrich_with_google(result, osm_type, osm_id)
     result = _enrich_wiki_links_via_http(result)
-    result = _enrich_with_wiki_via_http(result)
+    result = _enrich_with_wiki_index(result)
     return result
 
 
@@ -562,7 +563,7 @@ def get_place_by_wikidata(wikidata_id):
                 logger.debug(f"Wikidata boundary fetch failed: {e}")
         result["boundary"] = boundary
 
-        result = _enrich_with_wiki_via_http(result)
+        result = _enrich_with_wiki_index(result)
         logger.debug(f"Wikidata hit: {wikidata_id} -> {name}")
         return result, 200
 
